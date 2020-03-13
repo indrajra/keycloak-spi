@@ -1,4 +1,4 @@
-package org.sunbird.keycloak.restendpoints;
+package org.sunbird.keycloak;
 
 public class Constants {
   

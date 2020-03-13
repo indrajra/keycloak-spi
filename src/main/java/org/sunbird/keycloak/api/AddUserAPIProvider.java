@@ -1,4 +1,4 @@
-package org.sunbird.keycloak.restendpoints;
+package org.sunbird.keycloak.api;
 
 import org.jboss.logging.Logger;
 import org.keycloak.Config.Scope;
@@ -7,10 +7,10 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.services.resource.RealmResourceProviderFactory;
 
-public class RequiredActionLinkProviderFactory implements RealmResourceProviderFactory {
+public class AddUserAPIProvider implements RealmResourceProviderFactory {
 
   private static Logger logger =
-      Logger.getLogger(RequiredActionLinkProviderFactory.class);
+      Logger.getLogger(AddUserAPIProvider.class);
   public static final String PROVIDER_ID = "users";
 
   @Override
@@ -21,7 +21,7 @@ public class RequiredActionLinkProviderFactory implements RealmResourceProviderF
 
   @Override
   public RealmResourceProvider create(KeycloakSession session) {
-    return new RequiredActionLinkProvider(session);
+    return new AddUserController(session);
   }
 
   @Override
