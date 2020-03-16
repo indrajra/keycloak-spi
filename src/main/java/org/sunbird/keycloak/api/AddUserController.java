@@ -54,8 +54,8 @@ public class AddUserController implements RealmResourceProvider {
 			if(checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR); 
 			}
-			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
-			return Response.ok(user).build();
+			 RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+			return Response.ok(userD).build();
 		} catch (Exception e) {
 			return ErrorResponse.error(Constants.ERROR_CREATE_LINK, Status.INTERNAL_SERVER_ERROR);
 		}
