@@ -52,7 +52,8 @@ public class AddUserController implements RealmResourceProvider {
 			if(checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
-			 RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+			// FIXME: Encrypt email and store
+			RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
 			return Response.ok(userD).build();
 		} catch (Exception e) {
 			return ErrorResponse.error(Constants.ERROR_CREATE_LINK, Status.INTERNAL_SERVER_ERROR);
@@ -62,6 +63,7 @@ public class AddUserController implements RealmResourceProvider {
 	private boolean checkUserExist(UserRepresentation userD, UserProvider userProvider) {
 		UserModel user = userProvider.getUserByUsername(userD.getUsername(), session.getContext().getRealm());
 		if(user == null) {
+			// FIXME:
 			user = userProvider.getUserByEmail(userD.getEmail(), session.getContext().getRealm());
 			if(user == null) {
 				return false;

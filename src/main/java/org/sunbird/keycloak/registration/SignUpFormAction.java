@@ -104,6 +104,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
 //        String phone = formData.getFirst("user.attributes.phone");
 //        String age = formData.getFirst("user.attributes.age");
+        // FIXME: Encrypt email and store
         UserModel user = context.getSession().users().addUser(context.getRealm(), "encUserName_"+username);
 //        user.setAttribute("phone", new ArrayList<>(Arrays.asList("encryptedPhone_"+phone)));
 //        user.setAttribute("age", new ArrayList<>(Arrays.asList(age)));

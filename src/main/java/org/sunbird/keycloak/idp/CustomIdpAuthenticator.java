@@ -16,6 +16,7 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
     @Override
    // Empty method by default. This exists, so subclass can override and add callback after new user is registered through social
    protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
+        // FIXME: Encrypt email and store
         registeredUser.setEmail(prefix + registeredUser.getEmail());
    }
 
