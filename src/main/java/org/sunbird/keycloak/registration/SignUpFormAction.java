@@ -18,6 +18,7 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.validation.Validation;
+import org.sunbird.keycloak.core.EncryptionSevice;
 
 import javax.ws.rs.core.MultivaluedMap;
 import java.util.ArrayList;
@@ -63,8 +64,10 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
                 context.validationError(formData, errors);
                 return;
             }
+            EncryptionSevice encryptionService = new EncryptionSevice();
 
-            if (email != null && !context.getRealm().isDuplicateEmailsAllowed() && context.getSession().users().getUserByEmail(email, context.getRealm()) != null) {
+            if (email != null && !context.getRealm().isDuplicateEmailsAllowed() &&
+            		context.getSession().users().getUserByEmail(encryptionService.encrypt(email), context.getRealm()) != null) {
                 context.error("email_in_use");
                 formData.remove("email");
                 errors.add(new FormMessage("email", "emailExistsMessage"));
@@ -101,6 +104,8 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         logger.info("SignupFormAction - Success method called");
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String email = formData.getFirst(Validation.FIELD_EMAIL);
+        EncryptionSevice encryptionService = new EncryptionSevice();
+        String encryptedEmail = encryptionService.encrypt(email);
         String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
 //        String phone = formData.getFirst("user.attributes.phone");
 //        String age = formData.getFirst("user.attributes.age");
@@ -112,7 +117,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
         userCtx.setFirstName(formData.getFirst(RegistrationPage.FIELD_FIRST_NAME) + "ChangedF");
         userCtx.setLastName(formData.getFirst(RegistrationPage.FIELD_LAST_NAME) + "ChangedL");
-        userCtx.setEmail(email);
+        userCtx.setEmail(encryptedEmail);
         user.setEnabled(true);
 
         context.setUser(user);

@@ -21,18 +21,21 @@ import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.managers.AuthenticationManager.AuthResult;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.sunbird.keycloak.Constants;
+import org.sunbird.keycloak.core.EncryptionSevice;
 
 public class AddUserController implements RealmResourceProvider {
 
 	private static Logger logger = Logger.getLogger(AddUserController.class);
 	private KeycloakSession session;
-
+    
 	public AddUserController(KeycloakSession session) {
 		this.session = session;
+		
 	}
 
 	/**
 	 * The custom add user functionality. Encrypt the user PII here.
+	 * 
 	 * @param userD
 	 * @return
 	 */
@@ -43,16 +46,16 @@ public class AddUserController implements RealmResourceProvider {
 	public Response addUser(UserRepresentation userD) {
 		logger.debug("Start - add user");
 		checkRealmAdminAccess();
-
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
-			UserProvider userProvider =session.userLocalStorage();
-
-
-			if(checkUserExist(userD, userProvider)) {
+			UserProvider userProvider = session.userLocalStorage();
+			String email = userD.getEmail();
+			EncryptionSevice encryptionSevice = new EncryptionSevice();
+			userD.setEmail(encryptionSevice.encrypt(email));
+			
+			if (checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
-			// FIXME: Encrypt email and store
 			RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
 			return Response.ok(userD).build();
 		} catch (Exception e) {
@@ -62,10 +65,9 @@ public class AddUserController implements RealmResourceProvider {
 
 	private boolean checkUserExist(UserRepresentation userD, UserProvider userProvider) {
 		UserModel user = userProvider.getUserByUsername(userD.getUsername(), session.getContext().getRealm());
-		if(user == null) {
-			// FIXME:
+		if (user == null) {
 			user = userProvider.getUserByEmail(userD.getEmail(), session.getContext().getRealm());
-			if(user == null) {
+			if (user == null) {
 				return false;
 			}
 		}
