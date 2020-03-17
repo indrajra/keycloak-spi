@@ -1,14 +1,12 @@
 package org.sunbird.keycloak.idp;
 
 import org.keycloak.authentication.AuthenticationFlowContext;
-import org.keycloak.authentication.authenticators.broker.AbstractIdpAuthenticator;
 import org.keycloak.authentication.authenticators.broker.IdpCreateUserIfUniqueAuthenticator;
 import org.keycloak.authentication.authenticators.broker.util.ExistingUserInfo;
 import org.keycloak.authentication.authenticators.broker.util.SerializedBrokeredIdentityContext;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.sunbird.keycloak.core.EncryptionSevice;
 
 public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
     String prefix = "idpAuth_";
@@ -16,18 +14,20 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
     @Override
    // Empty method by default. This exists, so subclass can override and add callback after new user is registered through social
    protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
-        // FIXME: Encrypt email and store
-        registeredUser.setEmail(prefix + registeredUser.getEmail());
+
+    	EncryptionSevice encryptionService = new EncryptionSevice();
+        registeredUser.setEmail(prefix +encryptionService.encrypt(registeredUser.getEmail()));
    }
 
 
     // Could be overriden to detect duplication based on other criterias (firstName, lastName, ...)
     protected ExistingUserInfo checkExistingUser(AuthenticationFlowContext context, String username, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
 
+    	EncryptionSevice encryptionService = new EncryptionSevice();
         if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
-            UserModel existingUser = context.getSession().users().getUserByEmail(brokerContext.getEmail().substring(prefix.length()), context.getRealm());
+            UserModel existingUser = context.getSession().users().getUserByEmail(encryptionService.encrypt(brokerContext.getEmail().substring(prefix.length())), context.getRealm());
             if (existingUser != null) {
-                return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, existingUser.getEmail());
+                return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, encryptionService.decrypt(existingUser.getEmail()));
             }
         }
 
