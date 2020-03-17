@@ -15,7 +15,9 @@ public class OrgSupervisorMapping {
 
     public OrgSupervisorMapping() throws IOException {
         try {
-            orgSupervisorMap = new ObjectMapper().readTree(OrgSupervisorMapping.class.getResourceAsStream("OrgSupervisorMap.json"));
+            orgSupervisorMap = new ObjectMapper().readTree(readMapping());
+            logger.info(orgSupervisorMap.toString());
+
         } catch (IOException e) {
             logger.error("Error loading org supervisor mapping"  + e);
             throw e;
@@ -27,7 +29,7 @@ public class OrgSupervisorMapping {
     }
 
     private String readMapping() throws IOException {
-            InputStream inputStream = EncryptionSevice.class.getResourceAsStream("/secret.key");
+            InputStream inputStream = OrgSupervisorMapping.class.getResourceAsStream("/OrgSupervisorMap.json");
             InputStreamReader isReader = new InputStreamReader(inputStream);
             BufferedReader reader = new BufferedReader(isReader);
             StringBuffer sb = new StringBuffer();

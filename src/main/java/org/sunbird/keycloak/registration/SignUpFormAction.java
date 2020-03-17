@@ -28,6 +28,7 @@ import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.util.JsonSerialization;
 import org.sunbird.keycloak.core.EncryptionSevice;
+import org.sunbird.keycloak.core.OrgSupervisorMapping;
 import org.sunbird.keycloak.core.SBNotification;
 import org.sunbird.keycloak.core.SBNotificationPayload;
 
@@ -36,6 +37,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +45,21 @@ import java.util.Map;
 public class SignUpFormAction implements FormAction, FormActionFactory {
     private static Logger logger = Logger.getLogger(SignUpFormAction.class);
     public static final String PROVIDER_ID = "spi-signup-form-action";
+    private OrgSupervisorMapping orgSupervisorMapping;
+    private EncryptionSevice encryptionService;
 
-    public SignUpFormAction() {}
+    public SignUpFormAction() {
+        try {
+            orgSupervisorMapping = new OrgSupervisorMapping();
+            encryptionService = new EncryptionSevice();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (orgSupervisorMapping.getOrgSupervisorMap().isNull() || encryptionService == null) {
+                throw new RuntimeException("Can't load keys and maps");
+            }
+        }
+    }
 
     @Override
     public String getHelpText() {
@@ -73,6 +88,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         String usernameField = "username";
 
         if (!isEmailAllowed(email)) {
+            errors.add(new FormMessage("invalid_registration - this email is disallowed from registration"));
             context.error("invalid_registration - this email is disallowed from registration");
             context.validationError(formData, errors);
             return;
@@ -91,13 +107,6 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
                 context.error("invalid_registration - More than one error");
                 context.validationError(formData, errors);
                 return;
-            }
-            EncryptionSevice encryptionService = null;
-            try {
-                encryptionService = new EncryptionSevice();
-            } catch (IOException e) {
-                //This should not occur
-                e.printStackTrace();
             }
 
             if (email != null && !context.getRealm().isDuplicateEmailsAllowed() &&
@@ -163,12 +172,14 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             }
     }
 
-    private void sendSupervisorNotification(FormContext context, String employeeName) {
+    private void sendSupervisorNotification(FormContext context, String employeeName, String managerEmail) {
         List<SBNotification> allnotifications = new ArrayList<>();
         SBNotification notification = new SBNotification();
         notification.addToConfig("subject", "Reportee validation request - " + employeeName);
+        notification.setIds(Arrays.asList(managerEmail));
 
         SBNotification.Template template = notification.getTemplate();
+        template.setId("supervisorNotificationTemplate");
         template.addToParams("employeeName", employeeName);
         template.addToParams("empRecord", "https://registry.ekstep.in");
 
@@ -179,8 +190,9 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         sendToNotificationService(context, payload.toString());
     }
 
-    private void sendNotifications(FormContext context, String employeeName, String email) {
-        sendSupervisorNotification(context, employeeName);
+    private void sendNotifications(FormContext context, String employeeName, String email, String managerEmail) {
+        sendSupervisorNotification(context, employeeName, managerEmail);
+        // TODO: Add sendRegistrarNotification (to employee)
     }
 
     @Override
@@ -190,34 +202,30 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         String email = formData.getFirst(Validation.FIELD_EMAIL);
 
         if (isEmailAllowed(email)) {
-            EncryptionSevice encryptionService = null;
-            try {
-                encryptionService = new EncryptionSevice();
-            } catch (IOException e) {
-                // This should never occur.
-                e.printStackTrace();
-            }
             String encryptedEmail = encryptionService.encrypt(email);
+            logger.info("After encryption email is " + encryptedEmail);
             String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
+            String lastName = formData.getFirst(RegistrationPage.FIELD_LAST_NAME);
             String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
             String orgName = formData.getFirst("user.attributes.org");
             logger.info(username + " trying with org = " + orgName);
 
-//        String phone = formData.getFirst("user.attributes.phone");
-//        String age = formData.getFirst("user.attributes.age");
+            String managerEmail = orgSupervisorMapping.getOrgSupervisorMap().get(orgName).asText();
 
             UserModel user = context.getSession().users().addUser(context.getRealm(), username);
             UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
             userCtx.setFirstName(firstName);
-            //userCtx.setLastName(formData.getFirst(RegistrationPage.FIELD_LAST_NAME) + "ChangedL");
+            //userCtx.setLastName(lastName);
             userCtx.setEmail(encryptedEmail);
+
             user.setEnabled(true);
+
 
             context.setUser(user);
             context.getEvent().user(user);
             context.getEvent().success();
 
-            sendNotifications(context,firstName, email);
+            sendNotifications(context,firstName, email, managerEmail);
         } else {
             context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
         }
