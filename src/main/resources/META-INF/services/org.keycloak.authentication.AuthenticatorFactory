@@ -1,1 +1,3 @@
-org.sunbird.keycloak.RecaptchaLoginFormFactory
+org.sunbird.keycloak.login.RecaptchaLoginFormFactory
+org.sunbird.keycloak.registration.CustomUsernamePasswordAuthenticatorFactory
+org.sunbird.keycloak.idp.CustomIdpAuthenticatorFactory

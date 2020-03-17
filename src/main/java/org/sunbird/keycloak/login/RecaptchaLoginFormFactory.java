@@ -1,4 +1,4 @@
-package org.sunbird.keycloak;
+package org.sunbird.keycloak.login;
 
 import org.keycloak.Config;
 import org.keycloak.OAuth2Constants;
@@ -73,7 +73,7 @@ public class RecaptchaLoginFormFactory implements AuthenticatorFactory, DisplayT
 
     @Override
     public String getDisplayType() {
-        return "Recaptcha Username Password Form";
+        return "SPI Login with recaptcha";
     }
 
     @Override

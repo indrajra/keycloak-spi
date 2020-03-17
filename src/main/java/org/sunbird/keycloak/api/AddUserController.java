@@ -59,7 +59,7 @@ public class AddUserController implements RealmResourceProvider {
 //              user.addRequiredAction(UserModel.RequiredAction.valueOf(requiredAction.toUpperCase()));
 //          }
 //      }
-//      
+//
 			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
 			return Response.ok(user).build();
 		} catch (Exception e) {
