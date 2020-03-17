@@ -12,6 +12,7 @@ import javax.ws.rs.core.Response.Status;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.RepresentationToModel;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -45,26 +46,28 @@ public class AddUserController implements RealmResourceProvider {
 
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
-//
-//      System.out.println("REALM: "+session.getContext().getRealm());
-//      UserModel user = session.userLocalStorage().addUser(session.getContext().getRealm(),userD.getUsername()+"_test");
-//      user.setEnabled(userD.isEnabled() != null && userD.isEnabled());
-//      //user.setCreatedTimestamp(userRep.getCreatedTimestamp());
-//      user.setEmail(userD.getEmail());
-//      user.setEmailVerified(userD.isEmailVerified() != null && userD.isEmailVerified());
-//      user.setFirstName(userD.getFirstName());
-//      user.setLastName(userD.getLastName());
-//      if (userD.getRequiredActions() != null) {
-//          for (String requiredAction : userD.getRequiredActions()) {
-//              user.addRequiredAction(UserModel.RequiredAction.valueOf(requiredAction.toUpperCase()));
-//          }
-//      }
-//
-			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
-			return Response.ok(user).build();
+			UserProvider userProvider =session.userLocalStorage();
+
+
+			if(checkUserExist(userD, userProvider)) {
+				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
+			}
+			 RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+			return Response.ok(userD).build();
 		} catch (Exception e) {
 			return ErrorResponse.error(Constants.ERROR_CREATE_LINK, Status.INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	private boolean checkUserExist(UserRepresentation userD, UserProvider userProvider) {
+		UserModel user = userProvider.getUserByUsername(userD.getUsername(), session.getContext().getRealm());
+		if(user == null) {
+			user = userProvider.getUserByEmail(userD.getEmail(), session.getContext().getRealm());
+			if(user == null) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private void checkRealmAdminAccess() {
