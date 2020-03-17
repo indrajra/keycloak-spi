@@ -22,14 +22,15 @@ public class EncryptionSevice {
 	private static  String secretKey;
 	private static  String saltKey;
 	
-	public EncryptionSevice(){
+	public EncryptionSevice() throws IOException {
 		try {
 			init();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			logger.error("Error while initilization of encryption service"+e);
+			throw e;
 		}
 	}
+
 	void init() throws IOException {
 		InputStream inputStream = EncryptionSevice.class.getResourceAsStream("/secret.key");
 		InputStreamReader isReader = new InputStreamReader(inputStream);

@@ -1,5 +1,11 @@
 package org.sunbird.keycloak.registration;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.authentication.FormAction;
@@ -9,6 +15,7 @@ import org.keycloak.authentication.ValidationContext;
 import org.keycloak.authentication.forms.RegistrationPage;
 import org.keycloak.authentication.requiredactions.util.UpdateProfileContext;
 import org.keycloak.authentication.requiredactions.util.UserUpdateProfileContext;
+import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
@@ -17,12 +24,21 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
+import org.keycloak.util.JsonSerialization;
 import org.sunbird.keycloak.core.EncryptionSevice;
+import org.sunbird.keycloak.core.SBNotification;
+import org.sunbird.keycloak.core.SBNotificationPayload;
 
 import javax.ws.rs.core.MultivaluedMap;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 public class SignUpFormAction implements FormAction, FormActionFactory {
     private static Logger logger = Logger.getLogger(SignUpFormAction.class);
@@ -40,6 +56,11 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         return null;
     }
 
+    private boolean isEmailAllowed(String email) {
+        return email.endsWith("@ekstep.org") ||
+                email.endsWith("@societalplatform.org");
+    }
+
     @Override
     public void validate(ValidationContext context) {
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
@@ -50,6 +71,13 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         context.getEvent().detail("username", username);
         context.getEvent().detail("email", email);
         String usernameField = "username";
+
+        if (!isEmailAllowed(email)) {
+            context.error("invalid_registration - this email is disallowed from registration");
+            context.validationError(formData, errors);
+            return;
+        }
+
         if (context.getRealm().isRegistrationEmailAsUsername()) {
             context.getEvent().detail("username", email);
             if (Validation.isBlank(email)) {
@@ -60,11 +88,17 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             }
 
             if (errors.size() > 0) {
-                context.error("invalid_registration");
+                context.error("invalid_registration - More than one error");
                 context.validationError(formData, errors);
                 return;
             }
-            EncryptionSevice encryptionService = new EncryptionSevice();
+            EncryptionSevice encryptionService = null;
+            try {
+                encryptionService = new EncryptionSevice();
+            } catch (IOException e) {
+                //This should not occur
+                e.printStackTrace();
+            }
 
             if (email != null && !context.getRealm().isDuplicateEmailsAllowed() &&
             		context.getSession().users().getUserByEmail(encryptionService.encrypt(email), context.getRealm()) != null) {
@@ -76,7 +110,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             }
         } else {
             if (Validation.isBlank(username)) {
-                context.error("invalid_registration");
+                context.error("invalid_registration - username is blank");
                 errors.add(new FormMessage("username", "missingUsernameMessage"));
                 context.validationError(formData, errors);
                 return;
@@ -99,30 +133,94 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
     }
 
+    private void sendToNotificationService(FormContext context, String payload) {
+            HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
+            HttpPost post = new HttpPost("http://localhost:9012/v1/notification/send/sync");
+        StringEntity params = null;
+        try {
+            logger.info("Payload is " + payload);
+            params = new StringEntity(payload);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return;
+        }
+        post.addHeader("content-type", "application/json");
+            post.setEntity(params);
+            boolean success = false;
+            try {
+                HttpResponse response = httpClient.execute(post);
+                InputStream content = response.getEntity().getContent();
+                try {
+                    Map json = JsonSerialization.readValue(content, Map.class);
+                    Object val = ((Map) json.get("result")).get("response");
+                    success = Boolean.TRUE.equals(val);
+                } finally {
+                    content.close();
+                    logger.info("Notification send success = " + success);
+                }
+            } catch (Exception e) {
+                ServicesLogger.LOGGER.recaptchaFailed(e);
+            }
+    }
+
+    private void sendSupervisorNotification(FormContext context, String employeeName) {
+        List<SBNotification> allnotifications = new ArrayList<>();
+        SBNotification notification = new SBNotification();
+        notification.addToConfig("subject", "Reportee validation request - " + employeeName);
+
+        SBNotification.Template template = notification.getTemplate();
+        template.addToParams("employeeName", employeeName);
+        template.addToParams("empRecord", "https://registry.ekstep.in");
+
+        allnotifications.add(notification);
+
+        SBNotificationPayload payload = new SBNotificationPayload();
+        payload.setRequest(allnotifications);
+        sendToNotificationService(context, payload.toString());
+    }
+
+    private void sendNotifications(FormContext context, String employeeName, String email) {
+        sendSupervisorNotification(context, employeeName);
+    }
+
     @Override
     public void success(FormContext context) {
         logger.info("SignupFormAction - Success method called");
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String email = formData.getFirst(Validation.FIELD_EMAIL);
-        EncryptionSevice encryptionService = new EncryptionSevice();
-        String encryptedEmail = encryptionService.encrypt(email);
-        String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
+
+        if (isEmailAllowed(email)) {
+            EncryptionSevice encryptionService = null;
+            try {
+                encryptionService = new EncryptionSevice();
+            } catch (IOException e) {
+                // This should never occur.
+                e.printStackTrace();
+            }
+            String encryptedEmail = encryptionService.encrypt(email);
+            String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
+            String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
+            String orgName = formData.getFirst("user.attributes.org");
+            logger.info(username + " trying with org = " + orgName);
+
 //        String phone = formData.getFirst("user.attributes.phone");
 //        String age = formData.getFirst("user.attributes.age");
-        // FIXME: Encrypt email and store
-        UserModel user = context.getSession().users().addUser(context.getRealm(), "encUserName_"+username);
-//        user.setAttribute("phone", new ArrayList<>(Arrays.asList("encryptedPhone_"+phone)));
-//        user.setAttribute("age", new ArrayList<>(Arrays.asList(age)));
 
-        UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
-        userCtx.setFirstName(formData.getFirst(RegistrationPage.FIELD_FIRST_NAME) + "ChangedF");
-        userCtx.setLastName(formData.getFirst(RegistrationPage.FIELD_LAST_NAME) + "ChangedL");
-        userCtx.setEmail(encryptedEmail);
-        user.setEnabled(true);
+            UserModel user = context.getSession().users().addUser(context.getRealm(), username);
+            UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
+            userCtx.setFirstName(firstName);
+            //userCtx.setLastName(formData.getFirst(RegistrationPage.FIELD_LAST_NAME) + "ChangedL");
+            userCtx.setEmail(encryptedEmail);
+            user.setEnabled(true);
 
-        context.setUser(user);
-        context.getEvent().user(user);
-        context.getEvent().success();
+            context.setUser(user);
+            context.getEvent().user(user);
+            context.getEvent().success();
+
+            sendNotifications(context,firstName, email);
+        } else {
+            context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
+        }
     }
 
     @Override
