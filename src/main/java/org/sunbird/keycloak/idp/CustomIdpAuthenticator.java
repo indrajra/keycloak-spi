@@ -8,6 +8,8 @@ import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.models.UserModel;
 import org.sunbird.keycloak.core.EncryptionSevice;
 
+import java.io.IOException;
+
 public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
     String prefix = "idpAuth_";
 
@@ -15,7 +17,12 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
    // Empty method by default. This exists, so subclass can override and add callback after new user is registered through social
    protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
 
-    	EncryptionSevice encryptionService = new EncryptionSevice();
+        EncryptionSevice encryptionService = null;
+        try {
+            encryptionService = new EncryptionSevice();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         registeredUser.setEmail(prefix +encryptionService.encrypt(registeredUser.getEmail()));
    }
 
@@ -23,7 +30,12 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
     // Could be overriden to detect duplication based on other criterias (firstName, lastName, ...)
     protected ExistingUserInfo checkExistingUser(AuthenticationFlowContext context, String username, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
 
-    	EncryptionSevice encryptionService = new EncryptionSevice();
+        EncryptionSevice encryptionService = null;
+        try {
+            encryptionService = new EncryptionSevice();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
             UserModel existingUser = context.getSession().users().getUserByEmail(encryptionService.encrypt(brokerContext.getEmail().substring(prefix.length())), context.getRealm());
             if (existingUser != null) {
