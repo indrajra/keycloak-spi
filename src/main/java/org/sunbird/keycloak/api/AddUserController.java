@@ -9,8 +9,10 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import com.openshift.internal.restclient.model.kubeclient.User;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
@@ -44,7 +46,7 @@ public class AddUserController implements RealmResourceProvider {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response addUser(UserRepresentation userD) {
-		logger.debug("Start - add user");
+		logger.info("Start - add user");
 		checkRealmAdminAccess();
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
@@ -56,10 +58,19 @@ public class AddUserController implements RealmResourceProvider {
 			if (checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
-			RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+//			try {
+//				session.userCredentialManager().updateCredential(session.getContext().getRealm(),
+//						user,
+//						UserCredentialModel.password("password"));
+//				logger.info("Created user with default password");
+//			} catch (Exception me) {
+//				user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+//			}
 			return Response.ok(userD).build();
 		} catch (Exception e) {
-			return ErrorResponse.error(Constants.ERROR_CREATE_LINK, Status.INTERNAL_SERVER_ERROR);
+			logger.error(e);
+			return ErrorResponse.error(e.getMessage(), Status.INTERNAL_SERVER_ERROR);
 		}
 	}
 

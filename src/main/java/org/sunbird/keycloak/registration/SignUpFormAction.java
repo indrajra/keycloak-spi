@@ -1,5 +1,8 @@
 package org.sunbird.keycloak.registration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
@@ -16,13 +19,18 @@ import org.keycloak.authentication.forms.RegistrationPage;
 import org.keycloak.authentication.requiredactions.util.UpdateProfileContext;
 import org.keycloak.authentication.requiredactions.util.UserUpdateProfileContext;
 import org.keycloak.connections.httpclient.HttpClientProvider;
+import org.keycloak.events.Details;
+import org.keycloak.events.EventType;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
@@ -74,6 +82,14 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     private boolean isEmailAllowed(String email) {
         return email.endsWith("@ekstep.org") ||
                 email.endsWith("@societalplatform.org");
+    }
+
+    private String getDomain(String email) {
+        String domain = "EkStep";
+        if (email.endsWith("@societalplatform.org")) {
+            domain = "Societal Platform";
+        }
+        return domain;
     }
 
     @Override
@@ -143,8 +159,8 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     }
 
     private void sendToNotificationService(FormContext context, String payload) {
-            HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
-            HttpPost post = new HttpPost("http://localhost:9012/v1/notification/send/sync");
+        HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
+        HttpPost post = new HttpPost("http://localhost:9012/v1/notification/send/sync");
         StringEntity params = null;
         try {
             logger.info("Payload is " + payload);
@@ -172,6 +188,36 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             }
     }
 
+    private void sendToUtilService(FormContext context, String payload) {
+        HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
+        HttpPost post = new HttpPost("http://localhost:9081/register/users/self");
+        StringEntity params = null;
+        try {
+            logger.info("Payload is " + payload);
+            params = new StringEntity(payload);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return;
+        }
+        post.addHeader("content-type", "application/json");
+        post.setEntity(params);
+        boolean success = false;
+        try {
+            HttpResponse response = httpClient.execute(post);
+            InputStream content = response.getEntity().getContent();
+            try {
+                Map json = JsonSerialization.readValue(content, Map.class);
+                logger.info("Response from utils service" + json.toString());
+//                Object val = ((Map) json.get("result")).get("response");
+//                success = Boolean.TRUE.equals(val);
+            } finally {
+                content.close();
+            }
+        } catch (Exception e) {
+            ServicesLogger.LOGGER.recaptchaFailed(e);
+        }
+    }
+
     private void sendSupervisorNotification(FormContext context, String employeeName, String managerEmail) {
         List<SBNotification> allnotifications = new ArrayList<>();
         SBNotification notification = new SBNotification();
@@ -192,7 +238,29 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
     private void sendNotifications(FormContext context, String employeeName, String email, String managerEmail) {
         sendSupervisorNotification(context, employeeName, managerEmail);
-        // TODO: Add sendRegistrarNotification (to employee)
+        logger.info("Finished sending notifications on new user registration");
+    }
+
+    private void addUserToRegistry(FormContext context, UserModel user, String userPlainEmail, String managerEmail) {
+        String userDomain = getDomain(userPlainEmail);
+
+        ObjectNode empData = JsonNodeFactory.instance.objectNode();
+        empData.put("orgName", userDomain);
+        empData.put("isActive", false);
+        empData.put("isOnboarded", false);
+        empData.put("name", user.getFirstName() + user.getLastName());
+        empData.put("email", userPlainEmail);
+        empData.put("manager", managerEmail);
+        empData.put("kcid", user.getId());
+
+        ObjectNode empNode = JsonNodeFactory.instance.objectNode();
+        empNode.set("Employee", empData);
+
+        ObjectNode selfRegistrationPayload = JsonNodeFactory.instance.objectNode();
+        selfRegistrationPayload.put("id", "open-saber.registry.create");
+        selfRegistrationPayload.set("request", empNode);
+
+        sendToUtilService(context, selfRegistrationPayload.toString());
     }
 
     @Override
@@ -203,29 +271,39 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
         if (isEmailAllowed(email)) {
             String encryptedEmail = encryptionService.encrypt(email);
-            logger.info("After encryption email is " + encryptedEmail);
+            logger.debug("After encryption email is " + encryptedEmail);
             String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
             String lastName = formData.getFirst(RegistrationPage.FIELD_LAST_NAME);
             String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
             String orgName = formData.getFirst("user.attributes.org");
-            logger.info(username + " trying with org = " + orgName);
 
             String managerEmail = orgSupervisorMapping.getOrgSupervisorMap().get(orgName).asText();
 
             UserModel user = context.getSession().users().addUser(context.getRealm(), username);
-            UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
-            userCtx.setFirstName(firstName);
-            //userCtx.setLastName(lastName);
-            userCtx.setEmail(encryptedEmail);
-
+            //UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
+            user.setEmail(encryptedEmail);
+            user.setFirstName(firstName);
+            user.setLastName(lastName);
             user.setEnabled(true);
 
-
-            context.setUser(user);
             context.getEvent().user(user);
-            context.getEvent().success();
 
-            sendNotifications(context,firstName, email, managerEmail);
+            logger.info(username + " (" + user.getId() + ") logging with org = " + orgName);
+
+            //sendNotifications(context,firstName, email, managerEmail);
+            addUserToRegistry(context, user, email, managerEmail);
+
+            context.getEvent().success();
+            context.setUser(user);
+
+            context.newEvent().event(EventType.LOGIN);
+            context.getEvent().client(context.getAuthenticationSession().getClient().getClientId())
+                    .detail(Details.REDIRECT_URI, context.getAuthenticationSession().getRedirectUri())
+                    .detail(Details.AUTH_METHOD, context.getAuthenticationSession().getProtocol());
+            String authType = context.getAuthenticationSession().getAuthNote(Details.AUTH_TYPE);
+            if (authType != null) {
+                context.getEvent().detail(Details.AUTH_TYPE, authType);
+            }
         } else {
             context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
         }

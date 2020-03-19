@@ -11,8 +11,6 @@ import org.sunbird.keycloak.core.EncryptionSevice;
 import java.io.IOException;
 
 public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
-    String prefix = "idpAuth_";
-
     @Override
    // Empty method by default. This exists, so subclass can override and add callback after new user is registered through social
    protected void userRegisteredSuccess(AuthenticationFlowContext context, UserModel registeredUser, SerializedBrokeredIdentityContext serializedCtx, BrokeredIdentityContext brokerContext) {
@@ -23,7 +21,7 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        registeredUser.setEmail(prefix +encryptionService.encrypt(registeredUser.getEmail()));
+        registeredUser.setEmail(encryptionService.encrypt(registeredUser.getEmail()));
    }
 
 
@@ -37,10 +35,11 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
             e.printStackTrace();
         }
         if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
-            UserModel existingUser = context.getSession().users().getUserByEmail(encryptionService.encrypt(brokerContext.getEmail().substring(prefix.length())), context.getRealm());
+            UserModel existingUser = context.getSession().users().getUserByEmail(encryptionService.encrypt(brokerContext.getEmail()), context.getRealm());
             if (existingUser != null) {
                 return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, encryptionService.decrypt(existingUser.getEmail()));
             }
+
         }
 
         UserModel existingUser = context.getSession().users().getUserByUsername(username, context.getRealm());
