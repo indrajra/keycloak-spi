@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.sunbird.keycloak.registration;
+package org.sunbird.keycloak.login;
 
 import org.jboss.resteasy.specimpl.MultivaluedMapImpl;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -35,7 +35,7 @@ import javax.ws.rs.core.Response;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
-public class CustomUsernamePasswordForm extends AbstractCustomUsernameFormAuthenticator implements Authenticator {
+public class SignUpUsernamePasswordForm extends RecaptchaLoginFormAuthenticator implements Authenticator {
     protected static ServicesLogger log = ServicesLogger.LOGGER;
 
     @Override

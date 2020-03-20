@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.sunbird.keycloak.registration;
+package org.sunbird.keycloak.login;
 
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
@@ -33,12 +33,12 @@ import java.util.List;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
-public class CustomUsernamePasswordAuthenticatorFactory implements AuthenticatorFactory {
+public class SignUpFormAuthenticatorFactory implements AuthenticatorFactory {
 
-    private static final Logger logger = Logger.getLogger(CustomUsernamePasswordAuthenticatorFactory.class);
+    private static final Logger logger = Logger.getLogger(SignUpFormAuthenticatorFactory.class);
 
     public static final String PROVIDER_ID = "spi-username-password-form";
-    public static final CustomUsernamePasswordForm SINGLETON = new CustomUsernamePasswordForm();
+    public static final SignUpUsernamePasswordForm SINGLETON = new SignUpUsernamePasswordForm();
 
     @Override
     public Authenticator create(KeycloakSession session) {

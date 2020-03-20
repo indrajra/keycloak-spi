@@ -9,8 +9,10 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import com.openshift.internal.restclient.model.kubeclient.User;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
@@ -27,15 +29,15 @@ public class AddUserController implements RealmResourceProvider {
 
 	private static Logger logger = Logger.getLogger(AddUserController.class);
 	private KeycloakSession session;
-    
+
 	public AddUserController(KeycloakSession session) {
 		this.session = session;
-		
+
 	}
 
 	/**
 	 * The custom add user functionality. Encrypt the user PII here.
-	 * 
+	 *
 	 * @param userD
 	 * @return
 	 */
@@ -44,7 +46,7 @@ public class AddUserController implements RealmResourceProvider {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response addUser(UserRepresentation userD) {
-		logger.debug("Start - add user");
+		logger.info("Start - add user");
 		checkRealmAdminAccess();
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
@@ -52,14 +54,15 @@ public class AddUserController implements RealmResourceProvider {
 			String email = userD.getEmail();
 			EncryptionSevice encryptionSevice = new EncryptionSevice();
 			userD.setEmail(encryptionSevice.encrypt(email));
-			
+
 			if (checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
-			RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
 			return Response.ok(userD).build();
 		} catch (Exception e) {
-			return ErrorResponse.error(Constants.ERROR_CREATE_LINK, Status.INTERNAL_SERVER_ERROR);
+			logger.error(e);
+			return ErrorResponse.error(e.getMessage(), Status.INTERNAL_SERVER_ERROR);
 		}
 	}
 

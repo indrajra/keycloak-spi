@@ -1,9 +1,9 @@
-package org.sunbird.keycloak.registration;
+package org.sunbird.keycloak.login;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.jboss.logging.Logger;
@@ -23,22 +23,20 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.util.JsonSerialization;
 import org.sunbird.keycloak.core.EncryptionSevice;
 import org.sunbird.keycloak.core.OrgSupervisorMapping;
-import org.sunbird.keycloak.core.SBNotification;
-import org.sunbird.keycloak.core.SBNotificationPayload;
 
 import javax.ws.rs.core.MultivaluedMap;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -74,6 +72,14 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     private boolean isEmailAllowed(String email) {
         return email.endsWith("@ekstep.org") ||
                 email.endsWith("@societalplatform.org");
+    }
+
+    private String getDomain(String email) {
+        String domain = "EkStep";
+        if (email.endsWith("@societalplatform.org")) {
+            domain = "Societal Platform";
+        }
+        return domain;
     }
 
     @Override
@@ -142,9 +148,9 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
     }
 
-    private void sendToNotificationService(FormContext context, String payload) {
-            HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
-            HttpPost post = new HttpPost("http://localhost:9012/v1/notification/send/sync");
+    private void sendToUtilService(FormContext context, String payload) {
+        HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
+        HttpPost post = new HttpPost("http://localhost:9081/register/users/self");
         StringEntity params = null;
         try {
             logger.info("Payload is " + payload);
@@ -154,45 +160,42 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             return;
         }
         post.addHeader("content-type", "application/json");
-            post.setEntity(params);
-            boolean success = false;
+        post.setEntity(params);
+        boolean success = false;
+        try {
+            HttpResponse response = httpClient.execute(post);
+            InputStream content = response.getEntity().getContent();
             try {
-                HttpResponse response = httpClient.execute(post);
-                InputStream content = response.getEntity().getContent();
-                try {
-                    Map json = JsonSerialization.readValue(content, Map.class);
-                    Object val = ((Map) json.get("result")).get("response");
-                    success = Boolean.TRUE.equals(val);
-                } finally {
-                    content.close();
-                    logger.info("Notification send success = " + success);
-                }
-            } catch (Exception e) {
-                ServicesLogger.LOGGER.recaptchaFailed(e);
+                Map json = JsonSerialization.readValue(content, Map.class);
+                logger.info("Response from utils service" + json.toString());
+            } finally {
+                content.close();
             }
+        } catch (Exception e) {
+            ServicesLogger.LOGGER.recaptchaFailed(e);
+        }
     }
 
-    private void sendSupervisorNotification(FormContext context, String employeeName, String managerEmail) {
-        List<SBNotification> allnotifications = new ArrayList<>();
-        SBNotification notification = new SBNotification();
-        notification.addToConfig("subject", "Reportee validation request - " + employeeName);
-        notification.setIds(Arrays.asList(managerEmail));
+    private void addUserToRegistry(FormContext context, UserModel user, String userPlainEmail, String managerEmail) {
+        String userDomain = getDomain(userPlainEmail);
 
-        SBNotification.Template template = notification.getTemplate();
-        template.setId("supervisorNotificationTemplate");
-        template.addToParams("employeeName", employeeName);
-        template.addToParams("empRecord", "https://registry.ekstep.in");
+        ObjectNode empData = JsonNodeFactory.instance.objectNode();
+        empData.put("orgName", userDomain);
+        empData.put("isActive", false);
+        empData.put("isOnboarded", false);
+        empData.put("name", user.getFirstName() + user.getLastName());
+        empData.put("email", userPlainEmail);
+        empData.put("manager", managerEmail);
+        empData.put("kcid", user.getId());
 
-        allnotifications.add(notification);
+        ObjectNode empNode = JsonNodeFactory.instance.objectNode();
+        empNode.set("Employee", empData);
 
-        SBNotificationPayload payload = new SBNotificationPayload();
-        payload.setRequest(allnotifications);
-        sendToNotificationService(context, payload.toString());
-    }
+        ObjectNode selfRegistrationPayload = JsonNodeFactory.instance.objectNode();
+        selfRegistrationPayload.put("id", "open-saber.registry.create");
+        selfRegistrationPayload.set("request", empNode);
 
-    private void sendNotifications(FormContext context, String employeeName, String email, String managerEmail) {
-        sendSupervisorNotification(context, employeeName, managerEmail);
-        // TODO: Add sendRegistrarNotification (to employee)
+        sendToUtilService(context, selfRegistrationPayload.toString());
     }
 
     @Override
@@ -215,17 +218,17 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             UserModel user = context.getSession().users().addUser(context.getRealm(), username);
             UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
             userCtx.setFirstName(firstName);
-            //userCtx.setLastName(lastName);
+            userCtx.setLastName(lastName);
             userCtx.setEmail(encryptedEmail);
 
             user.setEnabled(true);
 
-
+            // Without setting this, next auth flows will break
             context.setUser(user);
             context.getEvent().user(user);
             context.getEvent().success();
 
-            sendNotifications(context,firstName, email, managerEmail);
+            addUserToRegistry(context, user, email, managerEmail);
         } else {
             context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
         }
@@ -281,7 +284,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         return REQUIREMENT_CHOICES;
     }
 
-    //@Override
+    @Override
     public FormAction create(KeycloakSession session) {
         return this;
     }

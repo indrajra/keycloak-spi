@@ -29,7 +29,7 @@ public class RecaptchaLoginFormFactory implements AuthenticatorFactory, DisplayT
     public Authenticator createDisplay(KeycloakSession session, String displayType) {
         if (displayType == null) return SINGLETON;
         if (!OAuth2Constants.DISPLAY_CONSOLE.equalsIgnoreCase(displayType)) return null;
-        return ConsoleUsernamePasswordAuthenticator.SINGLETON;
+        return RecaptchaLoginFormAuthenticator.SINGLETON;
     }
 
     @Override
