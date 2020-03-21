@@ -80,6 +80,7 @@ public class RecaptchaLoginFormAuthenticator extends UsernamePasswordForm implem
 
     private boolean validateUser(AuthenticationFlowContext context, UserModel user, MultivaluedMap<String, String> inputData) {
         if (!enabledUser(context, user)) {
+            logger.info("user is not enabled " + user.getUsername());
             return false;
         }
         String rememberMe = inputData.getFirst("rememberMe");

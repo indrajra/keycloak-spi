@@ -24,4 +24,7 @@ hs_err_pid*
 
 target
 
+.DS_Store
+secret.*
+
 OrgSupervisorMap.json

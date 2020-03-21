@@ -12,11 +12,15 @@ import javax.ws.rs.core.Response.Status;
 import com.openshift.internal.restclient.model.kubeclient.User;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.ModelException;
+import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.RepresentationToModel;
+import org.keycloak.policy.PasswordPolicyNotMetException;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ErrorResponse;
 import org.keycloak.services.managers.AppAuthManager;
@@ -25,14 +29,45 @@ import org.keycloak.services.resource.RealmResourceProvider;
 import org.sunbird.keycloak.Constants;
 import org.sunbird.keycloak.core.EncryptionSevice;
 
+import static org.keycloak.models.utils.RepresentationToModel.toModel;
+
 public class AddUserController implements RealmResourceProvider {
 
 	private static Logger logger = Logger.getLogger(AddUserController.class);
 	private KeycloakSession session;
+	protected UserProvider delegate;
 
 	public AddUserController(KeycloakSession session) {
 		this.session = session;
+	}
 
+	public UserProvider getDelegate() {
+		if (delegate != null) return delegate;
+		delegate = session.userStorageManager();
+
+		return delegate;
+	}
+
+
+	public void createCredentials(UserRepresentation userRep, UserModel user, boolean adminRequest) {
+		RealmModel realm = session.getContext().getRealm();
+		logger.info("Sent creds count = " + userRep.getCredentials().size());
+		if (userRep.getCredentials() != null) {
+			for (CredentialRepresentation cred : userRep.getCredentials()) {
+				if (cred.getType().equals("password")) {
+					session.userCredentialManager().updateCredential(realm, user, UserCredentialModel.password(cred.getValue(), adminRequest));
+					logger.info("Setting default credentials");
+				}
+			}
+		}
+	}
+
+	public void setRequiredActions(UserRepresentation userRep, UserModel user) {
+		if (userRep.getRequiredActions() != null) {
+			for (String action : userRep.getRequiredActions()) {
+				user.addRequiredAction(action);
+			}
+		}
 	}
 
 	/**
@@ -50,15 +85,28 @@ public class AddUserController implements RealmResourceProvider {
 		checkRealmAdminAccess();
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
-			UserProvider userProvider = session.userLocalStorage();
+			UserProvider userProvider = session.userStorageManager();
 			String email = userD.getEmail();
 			EncryptionSevice encryptionSevice = new EncryptionSevice();
-			userD.setEmail(encryptionSevice.encrypt(email));
+			String encryptedEmail = encryptionSevice.encrypt(email);
+			userD.setEmail(encryptedEmail);
 
 			if (checkUserExist(userD, userProvider)) {
 				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
-			UserModel user = RepresentationToModel.createUser(session, session.getContext().getRealm(), userD);
+
+			// Both addDefaultRoles and addDefaultRequiredActions are set to true
+			UserModel user = getDelegate().addUser(session.getContext().getRealm(),
+					userD.getId(), userD.getFirstName(), true, true);
+			user.setEmail(encryptedEmail);
+			user.setEmailVerified(userD.isEmailVerified());
+			user.setFirstName(userD.getFirstName());
+			user.setLastName(userD.getLastName());
+			user.setUsername(userD.getUsername());
+			user.setEnabled(true);
+			createCredentials(userD, user,false);
+			setRequiredActions(userD, user);
+
 			return Response.ok(userD).build();
 		} catch (Exception e) {
 			logger.error(e);

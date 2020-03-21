@@ -36,7 +36,9 @@ import javax.ws.rs.core.MultivaluedMap;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -187,6 +189,10 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         empData.put("email", userPlainEmail);
         empData.put("manager", managerEmail);
         empData.put("kcid", user.getId());
+
+        Date date = new Date();
+        String modifiedDate= new SimpleDateFormat("yyyy-MM-dd").format(date);
+        empData.put("startDate", modifiedDate);
 
         ObjectNode empNode = JsonNodeFactory.instance.objectNode();
         empNode.set("Employee", empData);
