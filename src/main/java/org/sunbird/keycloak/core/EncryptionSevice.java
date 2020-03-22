@@ -19,38 +19,37 @@ import org.jboss.logging.Logger;
 public class EncryptionSevice {
 
 	private static Logger logger = Logger.getLogger(EncryptionSevice.class);
-	private static  String secretKey;
-	private static  String saltKey;
-	
+	private static  String privateKeyStr;
+	private static  String publicKeyStr;
+
 	public EncryptionSevice() throws IOException {
 		try {
-			init();
+			loadKeys();
 		} catch (IOException e) {
-			logger.error("Error while initilization of encryption service"+e);
+			logger.error("Error while initialization of encryption service"+e);
 			throw e;
 		}
 	}
 
-	void init() throws IOException {
-		InputStream inputStream = EncryptionSevice.class.getResourceAsStream("/secret.key");
-		InputStreamReader isReader = new InputStreamReader(inputStream);
-  	    BufferedReader reader = new BufferedReader(isReader);
-	    StringBuffer sb = new StringBuffer();
-	    String str;
-	    while((str = reader.readLine())!= null){
-	         sb.append(str);
-	    }
-	    secretKey=sb.toString();
-	     
-	    inputStream = EncryptionSevice.class.getResourceAsStream("/secret.salt");
-	    isReader = new InputStreamReader(inputStream);
-	    reader = new BufferedReader(isReader);
-        sb = new StringBuffer();
-		while((str = reader.readLine())!= null){
-		       sb.append(str);
-		}
-		saltKey=sb.toString();
+	void loadKeys() throws IOException {
+			InputStream inputStream = EncryptionSevice.class.getResourceAsStream("/private.pem");
+			InputStreamReader isReader = new InputStreamReader(inputStream);
+			BufferedReader reader = new BufferedReader(isReader);
+			StringBuffer sb = new StringBuffer();
+			String str;
+			while ((str = reader.readLine()) != null) {
+				sb.append(str);
+			}
+			privateKeyStr = sb.toString();
 
+			inputStream = EncryptionSevice.class.getResourceAsStream("/public.pem");
+			isReader = new InputStreamReader(inputStream);
+			reader = new BufferedReader(isReader);
+			sb = new StringBuffer();
+			while ((str = reader.readLine()) != null) {
+				sb.append(str);
+			}
+			publicKeyStr = sb.toString();
 	}
 	
 	public  String encrypt(String data) {
@@ -59,7 +58,7 @@ public class EncryptionSevice {
 			IvParameterSpec ivspec = new IvParameterSpec(iv);
 
 			SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-			KeySpec spec = new PBEKeySpec(secretKey.toCharArray(), saltKey.getBytes(), 65536, 256);
+			KeySpec spec = new PBEKeySpec(privateKeyStr.toCharArray(), publicKeyStr.getBytes(), 65536, 256);
 			SecretKey tmp = factory.generateSecret(spec);
 			SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
 
@@ -78,7 +77,7 @@ public class EncryptionSevice {
 			IvParameterSpec ivspec = new IvParameterSpec(iv);
 
 			SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-			KeySpec spec = new PBEKeySpec(secretKey.toCharArray(), saltKey.getBytes(), 65536, 256);
+			KeySpec spec = new PBEKeySpec(privateKeyStr.toCharArray(), publicKeyStr.getBytes(), 65536, 256);
 			SecretKey tmp = factory.generateSecret(spec);
 			SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
 

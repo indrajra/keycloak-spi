@@ -211,7 +211,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         String email = formData.getFirst(Validation.FIELD_EMAIL);
 
         if (isEmailAllowed(email)) {
-            String encryptedEmail = encryptionService.encrypt(email);
+            String encryptedEmail = encryptionService.encrypt(email.toLowerCase());
             logger.info("After encryption email is " + encryptedEmail);
             String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
             String lastName = formData.getFirst(RegistrationPage.FIELD_LAST_NAME);

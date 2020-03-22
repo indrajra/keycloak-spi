@@ -18,8 +18,6 @@ import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
-import org.keycloak.models.utils.RepresentationToModel;
-import org.keycloak.policy.PasswordPolicyNotMetException;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ErrorResponse;
@@ -28,8 +26,6 @@ import org.keycloak.services.managers.AuthenticationManager.AuthResult;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.sunbird.keycloak.Constants;
 import org.sunbird.keycloak.core.EncryptionSevice;
-
-import static org.keycloak.models.utils.RepresentationToModel.toModel;
 
 public class AddUserController implements RealmResourceProvider {
 
@@ -86,7 +82,8 @@ public class AddUserController implements RealmResourceProvider {
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
 			UserProvider userProvider = session.userStorageManager();
-			String email = userD.getEmail();
+			// Change email to lowercase.
+			String email = userD.getEmail().toLowerCase();
 			EncryptionSevice encryptionSevice = new EncryptionSevice();
 			String encryptedEmail = encryptionSevice.encrypt(email);
 			userD.setEmail(encryptedEmail);
@@ -117,6 +114,7 @@ public class AddUserController implements RealmResourceProvider {
 	private boolean checkUserExist(UserRepresentation userD, UserProvider userProvider) {
 		UserModel user = userProvider.getUserByUsername(userD.getUsername(), session.getContext().getRealm());
 		if (user == null) {
+			// email is already encrypted in the userD
 			user = userProvider.getUserByEmail(userD.getEmail(), session.getContext().getRealm());
 			if (user == null) {
 				return false;

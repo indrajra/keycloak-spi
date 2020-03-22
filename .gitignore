@@ -26,5 +26,6 @@ target
 
 .DS_Store
 secret.*
+*.pem
 
 OrgSupervisorMap.json

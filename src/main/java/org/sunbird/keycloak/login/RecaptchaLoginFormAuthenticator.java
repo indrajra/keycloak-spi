@@ -155,7 +155,7 @@ public class RecaptchaLoginFormAuthenticator extends UsernamePasswordForm implem
     public UserModel customFindUserByNameOrEmail(KeycloakSession session , RealmModel realm, String username) {
         logger.info("CustomFindUsersByNameOrEmail");
         if (realm.isLoginWithEmailAllowed() && username.indexOf(64) != -1) {
-            UserModel user = session.users().getUserByEmail(encryptionService.encrypt(username), realm);
+            UserModel user = session.users().getUserByEmail(encryptionService.encrypt(username.toLowerCase()), realm);
             if (user != null) {
                 return user;
             }
