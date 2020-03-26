@@ -16,6 +16,8 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.jboss.logging.Logger;
 
+import com.google.common.io.BaseEncoding;
+
 public class EncryptionSevice {
 
 	private static Logger logger = Logger.getLogger(EncryptionSevice.class);
@@ -64,7 +66,7 @@ public class EncryptionSevice {
 
 			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 			cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
-			return Base64.getEncoder().encodeToString(cipher.doFinal(data.getBytes("UTF-8")));
+			return BaseEncoding.base32().lowerCase().encode(cipher.doFinal(data.getBytes("UTF-8")));
 		} catch (Exception e) {
 			logger.error("Error while encrypting: " + e.toString());
 		}
@@ -83,7 +85,7 @@ public class EncryptionSevice {
 
 			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
-			return new String(cipher.doFinal(Base64.getDecoder().decode(encryptedData)));
+			return new String(cipher.doFinal(BaseEncoding.base32().lowerCase().decode(encryptedData)));
 		} catch (Exception e) {
 			logger.error("Error while decrypting: " + e.toString());
 		}
