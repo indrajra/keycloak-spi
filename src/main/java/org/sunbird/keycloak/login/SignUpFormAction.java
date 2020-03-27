@@ -21,6 +21,7 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.RequiredActionProviderModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.models.utils.KeycloakModelUtils;
@@ -29,6 +30,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.util.JsonSerialization;
+import org.sunbird.keycloak.core.CustomVerifyEmail;
 import org.sunbird.keycloak.core.EncryptionSevice;
 import org.sunbird.keycloak.core.OrgSupervisorMapping;
 
@@ -51,7 +53,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     public SignUpFormAction() {
         try {
             orgSupervisorMapping = new OrgSupervisorMapping();
-            encryptionService = new EncryptionSevice();
+            encryptionService = EncryptionSevice.instance();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -72,8 +74,11 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     }
 
     private boolean isEmailAllowed(String email) {
-        return email.endsWith("@ekstep.org") ||
-                email.endsWith("@societalplatform.org");
+        // FIXME
+        logger.info("FIXME: Everyone can now register.");
+        return true;
+//        return email.endsWith("@ekstep.org") ||
+//                email.endsWith("@societalplatform.org");
     }
 
     private String getDomain(String email) {
@@ -96,8 +101,17 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         String usernameField = "username";
 
         if (!isEmailAllowed(email)) {
-            errors.add(new FormMessage("invalid_registration - this email is disallowed from registration"));
-            context.error("invalid_registration - this email is disallowed from registration");
+            context.error("email_disallowed_from_registration");
+            formData.remove("email");
+            errors.add(new FormMessage("email", "Email is invalid"));
+            context.validationError(formData, errors);
+            return;
+        }
+
+        String orgName = formData.getFirst("user.attributes.org");
+        if (orgName == null || orgName.isEmpty()) {
+            context.error("organization is not selected");
+            errors.add(new FormMessage("org", "Select an organization where you work for"));
             context.validationError(formData, errors);
             return;
         }
@@ -226,6 +240,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             userCtx.setFirstName(firstName);
             userCtx.setLastName(lastName);
             userCtx.setEmail(encryptedEmail);
+            userCtx.setSingleAttribute("plainEmail", email);
 
             user.setEnabled(true);
 
@@ -235,6 +250,8 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             context.getEvent().success();
 
             addUserToRegistry(context, user, email, managerEmail);
+            user.addRequiredAction(CustomVerifyEmail.PROVIDER_ID);
+
         } else {
             context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
         }
@@ -252,6 +269,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
     @Override
     public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {
+        user.addRequiredAction(CustomVerifyEmail.PROVIDER_ID);
     }
 
     @Override

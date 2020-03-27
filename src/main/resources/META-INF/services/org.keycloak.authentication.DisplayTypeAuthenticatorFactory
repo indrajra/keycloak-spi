@@ -1,1 +1,2 @@
 org.sunbird.keycloak.login.RecaptchaLoginFormFactory
+org.sunbird.keycloak.core.CustomVerifyEmail

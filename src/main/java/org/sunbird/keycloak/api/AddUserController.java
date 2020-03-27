@@ -9,10 +9,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import com.openshift.internal.restclient.model.kubeclient.User;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.ModelException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
@@ -24,7 +22,7 @@ import org.keycloak.services.ErrorResponse;
 import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.managers.AuthenticationManager.AuthResult;
 import org.keycloak.services.resource.RealmResourceProvider;
-import org.sunbird.keycloak.Constants;
+import org.sunbird.keycloak.SPIConstants;
 import org.sunbird.keycloak.core.EncryptionSevice;
 
 public class AddUserController implements RealmResourceProvider {
@@ -84,12 +82,13 @@ public class AddUserController implements RealmResourceProvider {
 			UserProvider userProvider = session.userStorageManager();
 			// Change email to lowercase.
 			String email = userD.getEmail().toLowerCase();
-			EncryptionSevice encryptionSevice = new EncryptionSevice();
+			EncryptionSevice encryptionSevice = EncryptionSevice.instance();
 			String encryptedEmail = encryptionSevice.encrypt(email);
+			logger.info("Encrypted email = " + encryptedEmail);
 			userD.setEmail(encryptedEmail);
 
 			if (checkUserExist(userD, userProvider)) {
-				return ErrorResponse.error(Constants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
+				return ErrorResponse.error(SPIConstants.USER_EXIST, Status.INTERNAL_SERVER_ERROR);
 			}
 
 			// Both addDefaultRoles and addDefaultRequiredActions are set to true
@@ -130,14 +129,14 @@ public class AddUserController implements RealmResourceProvider {
 
 		if (authResult == null) {
 			logger.info("Authentication session is null");
-			throw new WebApplicationException(ErrorResponse.error(Constants.ERROR_NOT_AUTHORIZED, Status.UNAUTHORIZED));
+			throw new WebApplicationException(ErrorResponse.error(SPIConstants.ERROR_NOT_AUTHORIZED, Status.UNAUTHORIZED));
 		} else if (authResult.getToken().getRealmAccess() == null
-				|| !authResult.getToken().getRealmAccess().isUserInRole(Constants.ADMIN)) {
+				|| !authResult.getToken().getRealmAccess().isUserInRole(SPIConstants.ADMIN)) {
 			logger.info("Forbidden - token related realm roles null or not admin");
 			authResult.getToken().getRealmAccess().getRoles().iterator().forEachRemaining(s -> logger.debug((s)));
 
 			throw new WebApplicationException(
-					ErrorResponse.error(Constants.ERROR_REALM_ADMIN_ROLE_ACCESS, Status.FORBIDDEN));
+					ErrorResponse.error(SPIConstants.ERROR_REALM_ADMIN_ROLE_ACCESS, Status.FORBIDDEN));
 		}
 	}
 

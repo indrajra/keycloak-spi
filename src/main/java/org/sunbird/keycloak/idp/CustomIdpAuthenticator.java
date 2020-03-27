@@ -15,7 +15,7 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
 
    public CustomIdpAuthenticator() {
        try {
-           encryptionService = new EncryptionSevice();
+           encryptionService = EncryptionSevice.instance();
        } catch (IOException e) {
            e.printStackTrace();
        }
@@ -42,7 +42,7 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
         if (brokerContext.getEmail() != null && !context.getRealm().isDuplicateEmailsAllowed()) {
             UserModel existingUser = context.getSession().users().getUserByEmail(getEncryptedEmail(brokerContext.getEmail()), context.getRealm());
             if (existingUser != null) {
-                return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, encryptionService.decrypt(existingUser.getEmail()));
+                return new ExistingUserInfo(existingUser.getId(), UserModel.EMAIL, existingUser.getEmail());
             }
         }
 

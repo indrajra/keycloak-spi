@@ -1,0 +1,2 @@
+org.sunbird.keycloak.core.CustomVerifyEmail
+org.sunbird.keycloak.core.CustomConsoleVerifyEmail

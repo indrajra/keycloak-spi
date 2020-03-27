@@ -35,6 +35,7 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
+import org.sunbird.keycloak.core.CustomUser;
 import org.sunbird.keycloak.core.EncryptionSevice;
 
 import javax.ws.rs.core.MultivaluedMap;
@@ -49,16 +50,7 @@ public class RecaptchaLoginFormAuthenticator extends UsernamePasswordForm implem
 
     public static final RecaptchaLoginFormAuthenticator SINGLETON = new RecaptchaLoginFormAuthenticator();
     private static final Logger logger = Logger.getLogger(RecaptchaLoginFormAuthenticator.class);
-    private EncryptionSevice encryptionService = null;
-
-    public RecaptchaLoginFormAuthenticator() {
-        try {
-            encryptionService = new EncryptionSevice();
-        } catch (IOException e) {
-            logger.error("Cant load keys");
-            e.printStackTrace();
-        }
-    }
+    protected CustomUser customUser = new CustomUser();
 
     @Override
     public boolean validateUserAndPassword(AuthenticationFlowContext context,
@@ -135,7 +127,7 @@ public class RecaptchaLoginFormAuthenticator extends UsernamePasswordForm implem
 
         UserModel user = null;
         try {
-            user = customFindUserByNameOrEmail(context.getSession(), context.getRealm(), username);
+            user = customUser.findUserByNameOrEmail(context.getSession(), context.getRealm(), username);
         } catch (ModelDuplicateException mde) {
             logger.info("Module duplicate exception");
             ServicesLogger.LOGGER.modelDuplicateException(mde);
@@ -152,19 +144,6 @@ public class RecaptchaLoginFormAuthenticator extends UsernamePasswordForm implem
         return user;
     }
 
-    public UserModel customFindUserByNameOrEmail(KeycloakSession session , RealmModel realm, String username) {
-        logger.info("CustomFindUsersByNameOrEmail");
-        if (realm.isLoginWithEmailAllowed() && username.indexOf(64) != -1) {
-            UserModel user = session.users().getUserByEmail(encryptionService.encrypt(username.toLowerCase()), realm);
-            if (user != null) {
-                return user;
-            }
-        }
-
-        logger.info("Finding by user name");
-        // Usernames are plain text
-        return session.users().getUserByUsername(username, realm);
-    }
 
     private void testInvalidUser(AuthenticationFlowContext context, UserModel user) {
         if (user == null) {

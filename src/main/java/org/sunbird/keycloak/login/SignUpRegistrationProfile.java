@@ -38,7 +38,7 @@ public class SignUpRegistrationProfile implements FormAction, FormActionFactory 
 
     public SignUpRegistrationProfile() {
         try {
-            encryptionService = new EncryptionSevice();
+            encryptionService = EncryptionSevice.instance();
         } catch (IOException e) {
             logger.error("Cant load keys");
             e.printStackTrace();

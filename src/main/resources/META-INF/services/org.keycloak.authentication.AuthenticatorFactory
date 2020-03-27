@@ -1,3 +1,4 @@
 org.sunbird.keycloak.login.RecaptchaLoginFormFactory
 org.sunbird.keycloak.login.SignUpFormAuthenticatorFactory
 org.sunbird.keycloak.idp.CustomIdpAuthenticatorFactory
+org.sunbird.keycloak.reset.ResetCredentials
