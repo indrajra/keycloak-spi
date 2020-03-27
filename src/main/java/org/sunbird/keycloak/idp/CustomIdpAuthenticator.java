@@ -22,7 +22,7 @@ public class CustomIdpAuthenticator extends IdpCreateUserIfUniqueAuthenticator {
    }
 
    private String getEncryptedEmail(String email) {
-       return encryptionService.encrypt(email.toLowerCase());
+       return encryptionService.encrypt(email);
    }
 
    private String getEmail(UserModel user) {

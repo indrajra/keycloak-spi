@@ -32,7 +32,7 @@ public class CustomUser {
     public UserModel findUserByNameOrEmail(KeycloakSession session , RealmModel realm, String username) {
         logger.info("CustomFindUsersByNameOrEmail");
         if (realm.isLoginWithEmailAllowed() && username.indexOf(64) != -1) {
-            UserModel user = session.users().getUserByEmail(encryptionService.encrypt(username.toLowerCase()), realm);
+            UserModel user = session.users().getUserByEmail(encryptionService.encrypt(username), realm);
             if (user != null) {
                 return user;
             }

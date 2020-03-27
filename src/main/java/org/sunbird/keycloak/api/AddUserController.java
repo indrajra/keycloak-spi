@@ -80,8 +80,7 @@ public class AddUserController implements RealmResourceProvider {
 		try {
 			userD.setId(KeycloakModelUtils.generateId());
 			UserProvider userProvider = session.userStorageManager();
-			// Change email to lowercase.
-			String email = userD.getEmail().toLowerCase();
+			String email = userD.getEmail();
 			EncryptionSevice encryptionSevice = EncryptionSevice.instance();
 			String encryptedEmail = encryptionSevice.encrypt(email);
 			logger.info("Encrypted email = " + encryptedEmail);
