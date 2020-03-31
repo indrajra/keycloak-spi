@@ -74,11 +74,8 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
     }
 
     private boolean isEmailAllowed(String email) {
-        // FIXME
-        logger.info("FIXME: Everyone can now register.");
-        return true;
-//        return email.endsWith("@ekstep.org") ||
-//                email.endsWith("@societalplatform.org");
+          return email.endsWith("@ekstep.org") ||
+                email.endsWith("@societalplatform.org");
     }
 
     private String getDomain(String email) {
@@ -100,18 +97,18 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         context.getEvent().detail("email", email);
         String usernameField = "username";
 
-        if (!isEmailAllowed(email)) {
-            context.error("email_disallowed_from_registration");
-            formData.remove("email");
-            errors.add(new FormMessage("email", "Email is invalid"));
-            context.validationError(formData, errors);
-            return;
-        }
-
         String orgName = formData.getFirst("user.attributes.org");
         if (orgName == null || orgName.isEmpty()) {
             context.error("organization is not selected");
             errors.add(new FormMessage("org", "Select an organization where you work for"));
+            context.validationError(formData, errors);
+            return;
+        }
+
+        if (!isEmailAllowed(email) && !orgName.equals("testing")) {
+            context.error("email_disallowed_from_registration");
+            formData.remove("email");
+            errors.add(new FormMessage("email", "Email is invalid"));
             context.validationError(formData, errors);
             return;
         }
@@ -223,15 +220,15 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         logger.info("SignupFormAction - Success method called");
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String email = formData.getFirst(Validation.FIELD_EMAIL);
+        String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
+        String orgName = formData.getFirst("user.attributes.org");
+        logger.info(username + " trying with org = " + orgName);
 
-        if (isEmailAllowed(email)) {
+        if (isEmailAllowed(email) || orgName.equals("testing")) {
             String encryptedEmail = encryptionService.encrypt(email);
             logger.info("After encryption email is " + encryptedEmail);
             String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
             String lastName = formData.getFirst(RegistrationPage.FIELD_LAST_NAME);
-            String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
-            String orgName = formData.getFirst("user.attributes.org");
-            logger.info(username + " trying with org = " + orgName);
 
             String managerEmail = orgSupervisorMapping.getOrgSupervisorMap().get(orgName).asText();
 
@@ -240,7 +237,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             userCtx.setFirstName(firstName);
             userCtx.setLastName(lastName);
             userCtx.setEmail(encryptedEmail);
-            userCtx.setSingleAttribute("plainEmail", email);
+            userCtx.setSingleAttribute("selfRegistered", String.valueOf(true));
 
             user.setEnabled(true);
 
