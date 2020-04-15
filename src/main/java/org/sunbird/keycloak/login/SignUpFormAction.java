@@ -1,7 +1,14 @@
 package org.sunbird.keycloak.login;
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import javax.ws.rs.core.MultivaluedMap;
+
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
@@ -21,44 +28,32 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
-import org.keycloak.models.RequiredActionProviderModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
-import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderConfigProperty;
-import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.util.JsonSerialization;
 import org.sunbird.keycloak.core.CustomVerifyEmail;
 import org.sunbird.keycloak.core.EncryptionSevice;
-import org.sunbird.keycloak.core.OrgSupervisorMapping;
 
-import javax.ws.rs.core.MultivaluedMap;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class SignUpFormAction implements FormAction, FormActionFactory {
     private static Logger logger = Logger.getLogger(SignUpFormAction.class);
     public static final String PROVIDER_ID = "spi-signup-form-action";
-    private OrgSupervisorMapping orgSupervisorMapping;
     private EncryptionSevice encryptionService;
 
     public SignUpFormAction() {
         try {
-            orgSupervisorMapping = new OrgSupervisorMapping();
             encryptionService = EncryptionSevice.instance();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            if (orgSupervisorMapping.getOrgSupervisorMap().isNull() || encryptionService == null) {
-                throw new RuntimeException("Can't load keys and maps");
+            if ( encryptionService == null) {
+                throw new RuntimeException("Can't load keys");
             }
         }
     }
@@ -73,18 +68,6 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         return null;
     }
 
-    private boolean isEmailAllowed(String email) {
-          return email.endsWith("@ekstep.org") ||
-                email.endsWith("@societalplatform.org");
-    }
-
-    private String getDomain(String email) {
-        String domain = "EkStep";
-        if (email.endsWith("@societalplatform.org")) {
-            domain = "Societal Platform";
-        }
-        return domain;
-    }
 
     @Override
     public void validate(ValidationContext context) {
@@ -97,18 +80,17 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         context.getEvent().detail("email", email);
         String usernameField = "username";
 
-        String orgName = formData.getFirst("user.attributes.org");
-        if (orgName == null || orgName.isEmpty()) {
-            context.error("organization is not selected");
-            errors.add(new FormMessage("org", "Select an organization where you work for"));
+        String school = formData.getFirst("user.attributes.school");
+        if (school == null || school.isEmpty()) {
+            context.error("School is not selected");
+            errors.add(new FormMessage("org", "Select the school where you work for"));
             context.validationError(formData, errors);
             return;
         }
-
-        if (!isEmailAllowed(email) && !orgName.equals("testing")) {
-            context.error("email_disallowed_from_registration");
-            formData.remove("email");
-            errors.add(new FormMessage("email", "Email is invalid"));
+        String subject = formData.getFirst("user.attributes.subject");
+        if (subject == null || subject.isEmpty()) {
+            context.error("Subject is not selected");
+            errors.add(new FormMessage("org", "Select the subject "));
             context.validationError(formData, errors);
             return;
         }
@@ -163,7 +145,7 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
 
     private void sendToUtilService(FormContext context, String payload) {
         HttpClient httpClient = context.getSession().getProvider(HttpClientProvider.class).getHttpClient();
-        HttpPost post = new HttpPost("http://localhost:9081/register/users/self");
+        HttpPost post = new HttpPost("http://localhost:9091/register/users/self");
         StringEntity params = null;
         try {
             logger.info("Payload is " + payload);
@@ -174,7 +156,6 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         }
         post.addHeader("content-type", "application/json");
         post.setEntity(params);
-        boolean success = false;
         try {
             HttpResponse response = httpClient.execute(post);
             InputStream content = response.getEntity().getContent();
@@ -189,24 +170,29 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         }
     }
 
-    private void addUserToRegistry(FormContext context, UserModel user, String userPlainEmail, String managerEmail) {
-        String userDomain = getDomain(userPlainEmail);
-
+    private void addUserToRegistry(FormContext context, UserModel user, String userPlainEmail, String school, String subject) {
+       // String userDomain = getDomain(userPlainEmail);
         ObjectNode empData = JsonNodeFactory.instance.objectNode();
-        empData.put("orgName", userDomain);
-        empData.put("isActive", false);
+        empData.put("schoolId", school);
+        empData.put("isActive", true);
         empData.put("isOnboarded", false);
-        empData.put("name", user.getFirstName() + user.getLastName());
+        empData.put("name", user.getFirstName() +" "+ user.getLastName());
         empData.put("email", userPlainEmail);
-        empData.put("manager", managerEmail);
         empData.put("kcid", user.getId());
+        
+        ObjectNode roleData = JsonNodeFactory.instance.objectNode();
+        ArrayNode subArr = JsonNodeFactory.instance.arrayNode();
+        subArr.add(subject);
+        roleData.set("mainSubjectsTaught", subArr);
+        
+        empData.set("teachingRole", roleData);
 
-        Date date = new Date();
-        String modifiedDate= new SimpleDateFormat("yyyy-MM-dd").format(date);
-        empData.put("startDate", modifiedDate);
+//        Date date = new Date();
+//        String modifiedDate= new SimpleDateFormat("yyyy-MM-dd").format(date);
+//        empData.put("startDate", modifiedDate);
 
         ObjectNode empNode = JsonNodeFactory.instance.objectNode();
-        empNode.set("Employee", empData);
+        empNode.set("Teacher", empData);
 
         ObjectNode selfRegistrationPayload = JsonNodeFactory.instance.objectNode();
         selfRegistrationPayload.put("id", "open-saber.registry.create");
@@ -221,16 +207,13 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String email = formData.getFirst(Validation.FIELD_EMAIL);
         String username = formData.getFirst(RegistrationPage.FIELD_USERNAME);
-        String orgName = formData.getFirst("user.attributes.org");
-        logger.info(username + " trying with org = " + orgName);
-
-        if (isEmailAllowed(email) || orgName.equals("testing")) {
+        String school = formData.getFirst("user.attributes.school");
+        String subject = formData.getFirst("user.attributes.subject");
+        logger.info(username + " trying with schoolName = " + school);
             String encryptedEmail = encryptionService.encrypt(email);
             logger.info("After encryption email is " + encryptedEmail);
             String firstName = formData.getFirst(RegistrationPage.FIELD_FIRST_NAME);
             String lastName = formData.getFirst(RegistrationPage.FIELD_LAST_NAME);
-
-            String managerEmail = orgSupervisorMapping.getOrgSupervisorMap().get(orgName).asText();
 
             UserModel user = context.getSession().users().addUser(context.getRealm(), username);
             UpdateProfileContext userCtx = new UserUpdateProfileContext(context.getRealm(), user);
@@ -245,13 +228,8 @@ public class SignUpFormAction implements FormAction, FormActionFactory {
             context.setUser(user);
             context.getEvent().user(user);
             context.getEvent().success();
-
-            addUserToRegistry(context, user, email, managerEmail);
+            addUserToRegistry(context, user, email, school, subject);
             user.addRequiredAction(CustomVerifyEmail.PROVIDER_ID);
-
-        } else {
-            context.getEvent().error("Disallowed registration. Can't recognize you, sorry!");
-        }
     }
 
     @Override
